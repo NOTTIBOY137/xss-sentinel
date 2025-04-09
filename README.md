@@ -23,3 +23,26 @@ pip install -r requirements.txt
 
 # Install the package in development mode
 pip install -e .
+
+
+## Usage
+Basic Scan
+Copyxss-sentinel https://example.com --ai-payloads --context-analysis
+Advanced Scan with Wayback Machine
+Copyxss-sentinel https://example.com --mode thorough --use-wayback --scan-js
+Quick Scan
+Copyxss-sentinel https://example.com --mode quick --evasion-level 2
+Scan from URL List
+Copyxss-sentinel https://example.com --urls-file targets.txt
+Command Line Options
+usage: xss-sentinel [-h] [-d DEPTH] [-o OUTPUT] [--no-ml] [-p PAYLOADS] [-m MODEL] [-v]
+                   [--include-subdomains] [--use-wayback] [--use-commoncrawl]
+                   [--max-urls MAX_URLS] [--respect-robots] [--timeout TIMEOUT]
+                   [--delay DELAY] [--max-tests MAX_TESTS] [--user-agent USER_AGENT]
+                   [--cookie COOKIE] [--parallel PARALLEL]
+                   [--scan-time-limit SCAN_TIME_LIMIT] [--ai-payloads]
+                   [--context-analysis] [--evasion-level {0,1,2,3}]
+                   [--payloads-per-point PAYLOADS_PER_POINT]
+                   [--mode {standard,thorough,quick,passive}] [--scan-js]
+                   [--urls-file URLS_FILE]
+                   url
