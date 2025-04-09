@@ -15,7 +15,7 @@ XSS Sentinel is a next-generation cross-site scripting detection tool that lever
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/xss-sentinel.git
+git clone https://github.com/NOTTIBOY137/xss-sentinel.git
 cd xss-sentinel
 
 # Install dependencies
