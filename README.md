@@ -1,4 +1,3 @@
-cat > README.md << 'EOF'
 # XSS Sentinel: Advanced AI-Powered XSS Testing Platform
 
 XSS Sentinel is a next-generation cross-site scripting detection tool that leverages AI/ML capabilities to identify and exploit XSS vulnerabilities in web applications.
