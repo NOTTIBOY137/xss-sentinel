@@ -12,7 +12,7 @@ setup(
         "numpy>=1.23.2",
         "tqdm>=4.64.0",
         "colorama>=0.4.5",
-        "tensorflow>=2.9.1",
+      #  "tensorflow>=2.9.1",
         "joblib>=1.1.0",
     ],
     entry_points={
