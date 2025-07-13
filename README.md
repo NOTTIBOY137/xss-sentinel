@@ -27,13 +27,13 @@ pip install -e .
 
 ## Usage
 Basic Scan
-Copyxss-sentinel https://example.com --ai-payloads --context-analysis
+xss-sentinel https://example.com --ai-payloads --context-analysis
 Advanced Scan with Wayback Machine
-Copyxss-sentinel https://example.com --mode thorough --use-wayback --scan-js
+xss-sentinel https://example.com --mode thorough --use-wayback --scan-js
 Quick Scan
-Copyxss-sentinel https://example.com --mode quick --evasion-level 2
+xss-sentinel https://example.com --mode quick --evasion-level 2
 Scan from URL List
-Copyxss-sentinel https://example.com --urls-file targets.txt
+xss-sentinel https://example.com --urls-file targets.txt
 Command Line Options
 usage: xss-sentinel [-h] [-d DEPTH] [-o OUTPUT] [--no-ml] [-p PAYLOADS] [-m MODEL] [-v]
                    [--include-subdomains] [--use-wayback] [--use-commoncrawl]
