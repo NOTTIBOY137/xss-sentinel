@@ -4,6 +4,7 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 import re
 from .wayback_crawler import WaybackCrawler, CommonCrawlService
+from ..utils.http_utils import make_request, is_blocked
 
 
 class AdvancedCrawler:
@@ -20,7 +21,7 @@ class AdvancedCrawler:
         
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'XSS-Sentinel/1.0 (Advanced Crawler)'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         })
         
         self.discovered_urls = set()
@@ -31,145 +32,163 @@ class AdvancedCrawler:
         """Main crawling method"""
         print(f"Starting advanced crawl from {self.start_url}")
         
-        # Start with the initial URL
-        self.discovered_urls.add(self.start_url)
+        # Start with the main URL
+        self._crawl_url(self.start_url, depth=0)
         
-        # Crawl in breadth-first manner
-        current_depth = 0
-        urls_to_crawl = [self.start_url]
-        
-        while current_depth < self.max_depth and urls_to_crawl:
-            next_level_urls = []
-            
-            for url in urls_to_crawl:
-                if len(self.discovered_urls) >= self.max_urls:
-                    break
-                    
-                try:
-                    self._crawl_url(url)
-                    next_level_urls.extend(self._extract_links(url))
-                    time.sleep(self.delay)
-                    
-                except Exception as e:
-                    print(f"Error crawling {url}: {e}")
-            
-            urls_to_crawl = next_level_urls
-            current_depth += 1
-            
-            print(f"Depth {current_depth}: Discovered {len(self.discovered_urls)} URLs so far")
+        # Try alternative discovery methods if standard crawling fails
+        if len(self.discovered_urls) < 10:
+            print("Standard crawling found few URLs, trying alternative methods...")
+            self._try_alternative_discovery()
         
         return {
             'urls': list(self.discovered_urls),
             'forms': self.discovered_forms
         }
     
-    def _crawl_url(self, url):
-        """Crawl a single URL and extract forms"""
+    def _crawl_url(self, url, depth=0):
+        """Crawl a single URL"""
+        if depth > self.max_depth or len(self.discovered_urls) >= self.max_urls:
+            return
+        
+        if url in self.discovered_urls:
+            return
+        
         try:
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
+            print(f"Depth {depth}: Crawling {url}")
             
-            soup = BeautifulSoup(response.content, 'html.parser')
+            # Use stealth request
+            response = make_request(url, stealth_mode=True)
             
-            # Extract forms
-            forms = soup.find_all('form')
-            for form in forms:
-                form_data = self._extract_form_data(form, url)
-                if form_data:
-                    self.discovered_forms.append(form_data)
-                    
+            if not response or response.status_code != 200:
+                print(f"Failed to access {url}: {response.status_code if response else 'No response'}")
+                return
+            
+            # Check if blocked
+            if is_blocked(response):
+                print(f"Access blocked for {url}")
+                return
+            
+            self.discovered_urls.add(url)
+            print(f"Depth {depth}: Discovered {len(self.discovered_urls)} URLs so far")
+            
+            # Extract links
+            links = self._extract_links(response.text, url)
+            
+            # Process forms
+            forms = self._extract_forms(response.text, url)
+            self.discovered_forms.extend(forms)
+            
+            # Follow links
+            for link in links:
+                if len(self.discovered_urls) >= self.max_urls:
+                    break
+                self._crawl_url(link, depth + 1)
+                time.sleep(self.delay)
+                
         except Exception as e:
             print(f"Error crawling {url}: {e}")
     
-    def _extract_links(self, url):
-        """Extract links from a page"""
-        new_urls = []
-        
+    def _extract_links(self, html, base_url):
+        """Extract links from HTML"""
+        links = []
         try:
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
+            soup = BeautifulSoup(html, 'html.parser')
             
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Find all links
-            links = soup.find_all('a', href=True)
-            
-            for link in links:
+            for link in soup.find_all('a', href=True):
                 href = link['href']
-                absolute_url = urljoin(url, href)
+                full_url = urljoin(base_url, href)
                 
-                # Validate URL
-                if self._is_valid_url(absolute_url):
-                    if absolute_url not in self.discovered_urls:
-                        self.discovered_urls.add(absolute_url)
-                        new_urls.append(absolute_url)
-                        
+                # Filter URLs
+                if self._should_follow_url(full_url):
+                    links.append(full_url)
+                    
         except Exception as e:
-            print(f"Error extracting links from {url}: {e}")
+            print(f"Error extracting links from {base_url}: {e}")
         
-        return new_urls
+        return links
     
-    def _extract_form_data(self, form, page_url):
-        """Extract form data for XSS testing"""
+    def _extract_forms(self, html, base_url):
+        """Extract forms from HTML"""
+        forms = []
         try:
-            action = form.get('action', '')
-            method = form.get('method', 'get').lower()
+            soup = BeautifulSoup(html, 'html.parser')
             
-            if action:
-                form_url = urljoin(page_url, action)
-            else:
-                form_url = page_url
-            
-            inputs = []
-            for input_tag in form.find_all(['input', 'textarea']):
-                input_type = input_tag.get('type', 'text')
-                input_name = input_tag.get('name', '')
+            for form in soup.find_all('form'):
+                action = form.get('action', '')
+                method = form.get('method', 'get').lower()
                 
-                if input_name and input_type in ['text', 'textarea', 'search', 'url', 'email']:
-                    inputs.append({
-                        'name': input_name,
-                        'type': input_type,
-                        'required': input_tag.get('required') is not None
+                if action:
+                    form_url = urljoin(base_url, action)
+                else:
+                    form_url = base_url
+                
+                # Extract form fields
+                fields = []
+                for input_tag in form.find_all(['input', 'textarea']):
+                    field_type = input_tag.get('type', 'text')
+                    field_name = input_tag.get('name', '')
+                    
+                    if field_name and field_type in ['text', 'textarea', 'search', 'url', 'email']:
+                        fields.append({
+                            'name': field_name,
+                            'type': field_type
+                        })
+                
+                if fields:
+                    forms.append({
+                        'url': form_url,
+                        'method': method,
+                        'fields': fields
                     })
-            
-            if inputs:
-                return {
-                    'url': form_url,
-                    'method': method,
-                    'inputs': inputs,
-                    'page_url': page_url
-                }
-                
+                    
         except Exception as e:
-            print(f"Error extracting form data: {e}")
+            print(f"Error extracting forms from {base_url}: {e}")
         
-        return None
+        return forms
     
-    def _is_valid_url(self, url):
-        """Check if URL is valid for crawling"""
+    def _should_follow_url(self, url):
+        """Determine if a URL should be followed"""
         try:
             parsed = urlparse(url)
             
-            # Must have a scheme and netloc
-            if not parsed.scheme or not parsed.netloc:
-                return False
-            
-            # Check if it's the same domain (unless subdomains are allowed)
+            # Check domain
             if not self.include_subdomains:
-                if parsed.netloc != self.domain and not parsed.netloc.endswith('.' + self.domain):
+                if parsed.netloc != self.domain:
+                    return False
+            else:
+                if not (parsed.netloc == self.domain or parsed.netloc.endswith('.' + self.domain)):
                     return False
             
             # Skip certain file types
-            skip_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.rar', '.exe']
-            if any(url.lower().endswith(ext) for ext in skip_extensions):
+            skip_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.rar', '.exe', '.jpg', '.jpeg', '.png', '.gif']
+            if any(parsed.path.lower().endswith(ext) for ext in skip_extensions):
                 return False
             
-            # Skip certain URL patterns
-            skip_patterns = ['mailto:', 'tel:', 'javascript:', '#']
-            if any(pattern in url.lower() for pattern in skip_patterns):
+            # Skip certain paths
+            skip_paths = ['/admin', '/login', '/logout', '/api/', '/ajax/']
+            if any(skip_path in parsed.path.lower() for skip_path in skip_paths):
                 return False
             
             return True
             
         except Exception:
-            return False 
+            return False
+    
+    def _try_alternative_discovery(self):
+        """Try alternative URL discovery methods"""
+        try:
+            # Try Wayback Machine
+            print("Trying Wayback Machine...")
+            wayback = WaybackCrawler()
+            wayback_urls = wayback.get_urls(self.domain, limit=100)
+            
+            for url in wayback_urls:
+                if len(self.discovered_urls) >= self.max_urls:
+                    break
+                if self._should_follow_url(url):
+                    self.discovered_urls.add(url)
+            
+            print(f"Found {len(wayback_urls)} URLs from Wayback Machine")
+            
+        except Exception as e:
+            print(f"Error with alternative discovery: {e}")
