@@ -130,10 +130,14 @@ class ParallelScanner:
         vulnerabilities = []
         
         try:
+            response = stealth_client.make_request(url)
+            
+            if not response:
+                return []
+            
             # Get stealth payloads
             base_payloads = self.payload_manager.get_payloads(count=10)
             stealth_payloads = []
-            
             for payload in base_payloads:
                 stealth_payloads.extend(generate_stealth_payloads(payload))
             
@@ -175,7 +179,7 @@ class ParallelScanner:
             ))
             
             # Make stealth request
-            response = self.client.make_request(test_url, payload=payload)
+            response = stealth_client.make_request(test_url, payload=payload)
             
             if response and response.status_code == 200:
                 # Check if payload is reflected
@@ -204,10 +208,10 @@ class ParallelScanner:
         vulnerabilities = []
         
         try:
-            response = self.client.make_request(url)
-            if not response or response.status_code != 200:
-                return []
-            
+            response = stealth_client.make_request(url)
+            if not response:
+                return vulnerabilities
+                
             soup = BeautifulSoup(response.text, 'html.parser')
             forms = soup.find_all('form')
             
@@ -255,31 +259,29 @@ class ParallelScanner:
                         test_data[input_name] = payload
                         
                         if method == 'post':
-                            response = self.client.make_request(form_url, method='POST', data=test_data, payload=payload)
+                            response = stealth_client.make_request(form_url, method='POST', data=test_data, payload=payload)
                         else:
                             # For GET forms, append to URL
                             test_url = f"{form_url}?{urlencode(test_data)}"
-                            response = self.client.make_request(test_url, payload=payload)
+                            response = stealth_client.make_request(test_url, payload=payload)
                         
                         # Check if payload is reflected
-                        if response and response.status_code == 200:
-                            if self._is_payload_reflected(response.text, payload):
-                                context = self._analyze_context(response.text, payload)
-                                
-                                vulnerabilities.append({
-                                    'url': form_url,
-                                    'param_name': input_name,
-                                    'payload': payload,
-                                    'original_value': '',
-                                    'context': context,
-                                    'response_length': len(response.text),
-                                    'status_code': response.status_code,
-                                    'timestamp': time.time(),
-                                    'type': 'form_xss'
-                                })
+                        if response and self._is_payload_reflected(response.text, payload):
+                            context = self._analyze_context(response.text, payload)
+                            
+                            vulnerabilities.append({
+                                'url': form_url,
+                                'param_name': input_name,
+                                'payload': payload,
+                                'original_value': '',
+                                'context': context,
+                                'response_length': len(response.text),
+                                'status_code': response.status_code,
+                                'timestamp': time.time()
+                            })
                         
-                        # Stealth delay
-                        time.sleep(random.uniform(0.5, 1.5))
+                        # Rate limiting
+                        time.sleep(self.delay)
                         
         except Exception as e:
             print(f"Error testing form on {page_url}: {e}")
@@ -289,12 +291,10 @@ class ParallelScanner:
     def _test_dom_xss(self, url: str) -> List[Dict[str, Any]]:
         """Test for DOM-based XSS vulnerabilities"""
         vulnerabilities = []
-        
         try:
-            response = self.client.make_request(url)
+            response = stealth_client.make_request(url)
             if not response or response.status_code != 200:
                 return []
-            
             # Look for JavaScript that processes user input
             js_patterns = [
                 r'document\.write\s*\(\s*[^)]*location\.[^)]*\)',
@@ -306,7 +306,6 @@ class ParallelScanner:
                 r'setTimeout\s*\(\s*[^)]*location\.[^)]*\)',
                 r'setInterval\s*\(\s*[^)]*location\.[^)]*\)'
             ]
-            
             content = response.text
             for pattern in js_patterns:
                 if re.search(pattern, content, re.IGNORECASE):
@@ -322,33 +321,13 @@ class ParallelScanner:
                         'type': 'dom_xss'
                     })
                     break
-                    
         except Exception as e:
             print(f"Error testing DOM XSS on {url}: {e}")
-        
         return vulnerabilities
     
     def _is_payload_reflected(self, response_text: str, payload: str) -> bool:
-        """Check if payload is reflected in the response"""
-        # Check for exact match
-        if payload in response_text:
-            return True
-        
-        # Check for encoded versions
-        try:
-            import urllib.parse
-            url_encoded = urllib.parse.quote(payload)
-            if url_encoded in response_text:
-                return True
-        except:
-            pass
-        
-        # Check for HTML encoded
-        html_encoded = payload.replace('<', '&lt;').replace('>', '&gt;')
-        if html_encoded in response_text:
-            return True
-        
-        return False
+        """Check if a payload is reflected in the response text"""
+        return payload in response_text
     
     def _analyze_context(self, response_text: str, payload: str) -> str:
         """Analyze the context where payload is reflected"""
@@ -388,11 +367,13 @@ class ParallelScanner:
             return "unknown"
     
     def get_scan_statistics(self) -> Dict[str, Any]:
-        """Get detailed statistics about the scan"""
-        stats = self.scan_stats.copy()
-        if stats['start_time'] and stats['end_time']:
-            stats['duration'] = stats['end_time'] - stats['start_time']
-        return stats
+        """Get statistics about the scan"""
+        return {
+            'total_urls': len(self.urls_to_scan),
+            'scanned_urls': len(self.results),
+            'vulnerabilities_found': len(self.results),
+            'target_domain': self.target_domain
+        }
 
 # Import missing module
 import re

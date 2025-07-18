@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: xss-sentinel
+Version: 0.1.0
+Requires-Dist: requests>=2.28.1
+Requires-Dist: beautifulsoup4>=4.11.1
+Requires-Dist: scikit-learn>=1.1.2
+Requires-Dist: numpy>=1.23.2
+Requires-Dist: tqdm>=4.64.0
+Requires-Dist: colorama>=0.4.5
+Requires-Dist: joblib>=1.1.0
+Dynamic: requires-dist
