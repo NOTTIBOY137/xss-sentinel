@@ -1,0 +1,6 @@
+{
+  "target": "https://httpbin.org/get",
+  "scan_time": 5.4772491455078125,
+  "urls_discovered": 1,
+  "vulnerabilities": []
+}
