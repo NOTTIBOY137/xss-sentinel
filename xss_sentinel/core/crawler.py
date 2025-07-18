@@ -82,4 +82,4 @@ class Crawler:
     def _normalize_url(self, url):
         """Normalize URL by removing fragments"""
         parsed = urlparse(url)
-        return f"{parsed.scheme}://{parsed.netloc}{parsed.path}{('?' + parsed.query) if parsed.query else ''}
+        return f"{parsed.scheme}://{parsed.netloc}{parsed.path}{('?' + parsed.query) if parsed.query else ''}"

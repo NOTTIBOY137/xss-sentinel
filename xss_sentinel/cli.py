@@ -6,14 +6,14 @@ from urllib.parse import urlparse
 from .core.crawler import Crawler
 from .core.scanner import XSSScanner
 from .core.reporter import Reporter
+from .core.payload_manager import PayloadManager
+from .core.parallel_scanner import ParallelScanner
 from .ml.model import XSSClassifier
+from .ml.payload_generator import PayloadGenerator
+from .ml.context_analyzer import ContextAnalyzer
 from .crawlers.wayback_crawler import WaybackCrawler, CommonCrawlService
 from .crawlers.advanced_crawler import AdvancedCrawler
 from .crawlers.js_crawler import JSCrawler, SPACrawler
-from .core.payload_manager import PayloadManager
-from .core.parallel_scanner import ParallelScanner
-from .ai.payload_generator import AIPayloadGenerator
-from .ai.context_analyzer import AdvancedContextAnalyzer
 
 def main():
     parser = argparse.ArgumentParser(description='XSS Sentinel - AI-Powered XSS vulnerability scanner')
@@ -201,11 +201,11 @@ def main():
             print("Initializing AI components...")
             
             if args.ai_payloads:
-                payload_generator = AIPayloadGenerator()
+                payload_generator = PayloadGenerator()
                 print("AI payload generator initialized")
             
             if args.context_analysis:
-                context_analyzer = AdvancedContextAnalyzer()
+                context_analyzer = ContextAnalyzer()
                 print("Advanced context analyzer initialized")
         
         # Determine which URLs to scan based on mode
