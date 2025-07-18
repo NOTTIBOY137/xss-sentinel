@@ -57,7 +57,7 @@ class AdvancedCrawler:
             print(f"Depth {depth}: Crawling {url}")
             
             # Use stealth request
-            response = make_request(url, stealth_mode=True)
+            response = make_request(url)
             
             if not response or response.status_code != 200:
                 print(f"Failed to access {url}: {response.status_code if response else 'No response'}")
