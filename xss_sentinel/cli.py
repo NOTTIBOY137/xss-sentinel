@@ -6,6 +6,12 @@ from urllib.parse import urlparse
 from .core.crawler import Crawler
 from .core.scanner import XSSScanner
 from .core.reporter import Reporter
+from .core.html_reporter import HTMLReporter
+try:
+    from .ai.core_ai import XSSAICore
+    AI_CORE_AVAILABLE = True
+except ImportError:
+    AI_CORE_AVAILABLE = False
 from .core.payload_manager import PayloadManager
 from .core.parallel_scanner import ParallelScanner
 from .ml.model import XSSClassifier
@@ -14,6 +20,17 @@ from .ml.context_analyzer import ContextAnalyzer
 from .crawlers.wayback_crawler import WaybackCrawler, CommonCrawlService
 from .crawlers.advanced_crawler import AdvancedCrawler
 from .crawlers.js_crawler import JSCrawler, SPACrawler
+
+# Import AI modules
+try:
+    from .ai.core_ai import XSSAICore
+    from .ai.transformer_generator import TransformerPayloadGenerator
+    from .ai.adaptive_learning import AdaptiveLearningEngine
+    AI_AVAILABLE = True
+    print("\033[92m🚀 AI modules loaded successfully!\033[0m")
+except ImportError as e:
+    AI_AVAILABLE = False
+    print(f"\033[93m⚠️ AI modules not available: {e}\033[0m")
 
 def main():
     parser = argparse.ArgumentParser(description='XSS Sentinel - AI-Powered XSS vulnerability scanner')
@@ -28,6 +45,9 @@ def main():
     parser.add_argument('-p', '--payloads', help='Path to custom XSS payloads file')
     parser.add_argument('-m', '--model', help='Path to trained model directory')
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
+    parser.add_argument('--report-format', choices=['json', 'html', 'txt'], default='json', help='Output report format (default: json)')
+    parser.add_argument('--list-contexts', action='store_true', help='List all supported context types and exit')
+    parser.add_argument('--model-path', help='Path to custom/fine-tuned AI model directory')
     
     # Advanced crawling options
     parser.add_argument('--include-subdomains', action='store_true', help='Include subdomains during crawling')
@@ -60,6 +80,15 @@ def main():
     parser.add_argument('--urls-file', help='File with URLs to scan (one per line)')
     
     args = parser.parse_args()
+    
+    # List context types and exit if requested
+    if args.list_contexts:
+        if AI_CORE_AVAILABLE:
+            print("Supported context types:")
+            print("- form_input\n- url_parameter\n- dom_element\n- csp_protected\n- waf_detected\n- template_injection\n- json_injection\n- dom_xss\n- reflected_xss\n- stored_xss\n- unknown")
+        else:
+            print("AI core not available.")
+        sys.exit(0)
     
     # Validate URL
     if not args.url.startswith(('http://', 'https://')):
@@ -120,7 +149,7 @@ def main():
             print("Using Wayback Machine to discover additional URLs...")
             wayback = WaybackCrawler(delay=args.delay)
             domain = urlparse(args.url).netloc
-            wayback_urls = wayback.get_wayback_urls(domain, limit=args.max_urls)
+            wayback_urls = wayback.get_urls(domain, limit=args.max_urls)
             
             print(f"Discovered {len(wayback_urls)} URLs through Wayback Machine")
             all_urls.update(wayback_urls)
@@ -198,15 +227,26 @@ def main():
         
         # Initialize AI components if enabled
         if not args.no_ml and (args.ai_payloads or args.context_analysis):
-            print("Initializing AI components...")
-            
-            if args.ai_payloads:
-                payload_generator = PayloadGenerator()
-                print("AI payload generator initialized")
-            
-            if args.context_analysis:
-                context_analyzer = ContextAnalyzer()
-                print("Advanced context analyzer initialized")
+            print("Initializing Next-Gen AI Stack...")
+            ai_core = None
+            transformer_gen = None
+            adaptive_engine = None
+            if AI_AVAILABLE:
+                if args.model_path:
+                    ai_core = XSSAICore(model_path=args.model_path)
+                else:
+                    ai_core = XSSAICore()
+                transformer_gen = TransformerPayloadGenerator()
+                adaptive_engine = AdaptiveLearningEngine()
+                print("[AI] XSS AI Core, Transformer Generator, and Adaptive Learning Engine initialized!")
+            else:
+                print("[AI] Advanced AI modules not available. Falling back to legacy ML components.")
+                if args.ai_payloads:
+                    payload_generator = PayloadGenerator()
+                    print("Legacy AI payload generator initialized")
+                if args.context_analysis:
+                    context_analyzer = ContextAnalyzer()
+                    print("Legacy context analyzer initialized")
         
         # Determine which URLs to scan based on mode
         urls_to_scan = list(all_urls)
@@ -252,17 +292,32 @@ def main():
                 print("-"*60)
         
         # Generate report
-        report_path = os.path.join(args.output, f"xss_scan_{int(time.time())}.json")
-        with open(report_path, 'w') as f:
-            import json
-            json.dump({
-                'target': args.url,
-                'scan_time': scan_time,
-                'urls_discovered': len(all_urls),
-                'vulnerabilities': vulnerabilities
-            }, f, indent=2)
-        
-        print(f"Detailed report saved to: {report_path}")
+        if args.report_format == 'html':
+            html_reporter = HTMLReporter(args.output)
+            report_path = html_reporter.generate_html_report(vulnerabilities, args.url)
+        elif args.report_format == 'txt':
+            txt_path = os.path.join(args.output, f"xss_scan_{int(time.time())}.txt")
+            with open(txt_path, 'w', encoding='utf-8') as f:
+                for i, vuln in enumerate(vulnerabilities, 1):
+                    f.write(f"{i}. URL: {vuln['url']}\n")
+                    f.write(f"   Parameter: {vuln.get('parameter','')}\n")
+                    f.write(f"   Type: {vuln.get('type','')}\n")
+                    f.write(f"   Context: {vuln.get('context','')}\n")
+                    f.write(f"   Payload: {vuln.get('payload','')}\n")
+                    f.write("-"*60 + "\n")
+            print(f"Text report saved to: {txt_path}")
+            report_path = txt_path
+        else:
+            report_path = os.path.join(args.output, f"xss_scan_{int(time.time())}.json")
+            with open(report_path, 'w') as f:
+                import json
+                json.dump({
+                    'target': args.url,
+                    'scan_time': scan_time,
+                    'urls_discovered': len(all_urls),
+                    'vulnerabilities': vulnerabilities
+                }, f, indent=2)
+            print(f"Detailed report saved to: {report_path}")
         
     except KeyboardInterrupt:
         print("\nScan interrupted by user.")

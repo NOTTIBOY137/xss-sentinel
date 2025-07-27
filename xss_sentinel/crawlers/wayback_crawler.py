@@ -14,7 +14,7 @@ class WaybackCrawler:
             'User-Agent': 'XSS-Sentinel/1.0 (Wayback Crawler)'
         })
     
-    def get_wayback_urls(self, domain, limit=1000):
+    def get_urls(self, domain, limit=1000):
         """Get URLs for a domain from Wayback Machine"""
         urls = set()
         

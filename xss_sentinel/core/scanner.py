@@ -1,10 +1,21 @@
 import re
 import requests
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 from urllib.parse import urljoin, urlparse
 from ..utils.http_utils import make_request
-from ..ml.context_analyzer import ContextAnalyzer
-from ..ml.payload_generator import PayloadGenerator
+from ..utils.browser_verifier import verify_xss_execution
+# Remove legacy ML imports
+# from ..ml.context_analyzer import ContextAnalyzer
+# from ..ml.payload_generator import PayloadGenerator
+# Add new AI imports
+try:
+    from ..ai.core_ai import XSSAICore
+    from ..ai.transformer_generator import TransformerPayloadGenerator
+    from ..ai.adaptive_learning import AdaptiveLearningEngine
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
 
 class XSSScanner:
     def __init__(self, url, depth=2, use_ml=True):
@@ -15,10 +26,15 @@ class XSSScanner:
         self.input_points = []
         self.use_ml = use_ml
         
-        # Initialize ML components if enabled
-        if self.use_ml:
-            self.context_analyzer = ContextAnalyzer()
-            self.payload_generator = PayloadGenerator()
+        # Initialize AI components if enabled
+        if self.use_ml and AI_AVAILABLE:
+            self.ai_core = XSSAICore()
+            self.transformer_gen = TransformerPayloadGenerator()
+            self.adaptive_engine = AdaptiveLearningEngine()
+        else:
+            self.ai_core = None
+            self.transformer_gen = None
+            self.adaptive_engine = None
     
     def scan(self):
         """Main scanning process"""
@@ -49,7 +65,11 @@ class XSSScanner:
             
             # Find all links on the page
             for link in soup.find_all('a', href=True):
-                href = link['href']
+                if not isinstance(link, Tag):
+                    continue
+                href = link.get('href')
+                if not isinstance(href, str) or not href:
+                    continue
                 full_url = urljoin(url, href)
                 
                 # Only follow links to the same domain
@@ -89,15 +109,24 @@ class XSSScanner:
                 forms = soup.find_all('form')
                 
                 for form in forms:
+                    if not isinstance(form, Tag):
+                        continue
                     action = form.get('action', '')
-                    method = form.get('method', 'get').lower()
-                    form_url = urljoin(url, action)
-                    
+                    method = form.get('method', 'get')
+                    if not isinstance(method, str):
+                        method = 'get'
+                    method = method.lower()
+                    form_url = urljoin(url, str(action))
                     inputs = form.find_all(['input', 'textarea'])
                     for input_field in inputs:
+                        if not isinstance(input_field, Tag):
+                            continue
                         field_type = input_field.get('type', '')
                         field_name = input_field.get('name', '')
-                        
+                        if not isinstance(field_type, str):
+                            field_type = ''
+                        if not isinstance(field_name, str):
+                            field_name = ''
                         # Skip submit buttons and hidden fields
                         if field_type not in ['submit', 'button', 'hidden'] and field_name:
                             self.input_points.append({
@@ -117,56 +146,58 @@ class XSSScanner:
         print(f"Testing {len(self.input_points)} potential injection points...")
         
         for point in self.input_points:
-            vulnerable, context, payload = self._test_injection_point(point)
+            vulnerable, context, payload, verified, evidence = self._test_injection_point(point)
             
             if vulnerable:
-                print(f"Found XSS vulnerability in {point['url']} - Parameter: {point['param_name']}")
+                print(f"Found XSS vulnerability in {point['url']} - Parameter: {point['param_name']} (Verified: {verified})")
                 results.append({
                     'url': point['url'],
                     'parameter': point['param_name'],
                     'type': point['type'],
                     'payload': payload,
-                    'context': context
+                    'context': context,
+                    'verified': verified,
+                    'evidence': evidence
                 })
         
         return results
     
     def _test_injection_point(self, point):
         """Test a specific injection point with various payloads"""
-        # Generate test payload
         test_marker = f"XSS{hash(point['url'] + point['param_name'])}"
-        
         try:
-            # Send a benign payload first to identify context
             response = self._inject_payload(point, test_marker)
             if not response:
-                return False, None, None
-            
-            # Analyze where/if our marker appears (to identify context)
+                return False, None, None, None, None
             context = None
             if test_marker in response.text:
-                if self.use_ml:
-                    context = self.context_analyzer.identify_context(response.text, test_marker)
+                if self.use_ml and self.ai_core:
+                    # Use advanced AI context analysis
+                    context = self.ai_core.analyze_context(response.text, point['url'])
                 else:
-                    # Basic context detection
                     context = self._basic_context_detection(response.text, test_marker)
-            
-                # Now test with actual XSS payloads based on the context
-                payloads = self._get_payloads(context)
-                
+                payloads = self._get_payloads(context, point)
                 for payload in payloads:
                     injection_response = self._inject_payload(point, payload)
                     if not injection_response:
                         continue
-                    
-                    # Check if the payload was executed (simplified check)
                     if self._check_payload_execution(injection_response, payload):
-                        return True, context, payload
-        
+                        # Browser-based verification
+                        verified, evidence = verify_xss_execution(
+                            point['url'], payload, point['param_name'],
+                            point.get('form_method', 'get'), context
+                        )
+                        if verified:
+                            # Real-time learning: update adaptive engine
+                            if self.use_ml and self.adaptive_engine:
+                                context_dict = context if isinstance(context, dict) else {'context_type': context}
+                                self.adaptive_engine.learn_from_result(payload, context_dict, True, {'response': injection_response.text})
+                            return True, context, payload, True, evidence
+                        else:
+                            return True, context, payload, False, evidence
         except Exception as e:
             print(f"Error testing {point['url']}: {e}")
-        
-        return False, None, None
+        return False, None, None, False, None
     
     def _inject_payload(self, point, payload):
         """Inject a payload into the specified input point"""
@@ -206,21 +237,31 @@ class XSSScanner:
             print(f"Error injecting payload: {e}")
             return None
     
-    def _get_payloads(self, context):
+    def _get_payloads(self, context, point=None):
         """Get appropriate XSS payloads for the identified context"""
-        if self.use_ml:
-            # Use ML-based payload generator
-            return self.payload_generator.generate(context, count=5)
-        else:
-            # Use basic payload list
-            return [
-                "<script>alert('XSS')</script>",
-                "<img src=x onerror=alert('XSS')>",
-                "javascript:alert('XSS')",
-                "\"><script>alert('XSS')</script>",
-                "';alert('XSS');//",
-                "<svg/onload=alert('XSS')>"
-            ]
+        if self.use_ml and self.ai_core:
+            # Use AI-powered payload generation
+            try:
+                ai_payloads = self.ai_core.generate_ai_payloads(context, point['url'] if point else self.target_url)
+                # Optionally add transformer-based and adaptive payloads
+                if self.transformer_gen:
+                    ai_payloads += self.transformer_gen.generate_context_payloads(str(context), count=5)
+                if self.adaptive_engine:
+                    ai_payloads += self.adaptive_engine.generate_adaptive_payloads(context, count=5)
+                # Deduplicate and return
+                return list(set(ai_payloads))[:15]
+            except Exception as e:
+                print(f"[AI] Error generating AI payloads: {e}")
+                # Fallback to basic payloads
+        # Fallback to basic payloads
+        return [
+            "<script>alert('XSS')</script>",
+            "<img src=x onerror=alert('XSS')>",
+            "javascript:alert('XSS')",
+            "\"><script>alert('XSS')</script>",
+            "';alert('XSS');//",
+            "<svg/onload=alert('XSS')>"
+        ]
     
     def _basic_context_detection(self, html, marker):
         """Basic context detection for XSS (simplified)"""

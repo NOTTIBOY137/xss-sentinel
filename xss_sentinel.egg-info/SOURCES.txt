@@ -10,8 +10,10 @@ xss_sentinel.egg-info/requires.txt
 xss_sentinel.egg-info/top_level.txt
 xss_sentinel/core/__init__.py
 xss_sentinel/core/crawler.py
+xss_sentinel/core/html_reporter.py
 xss_sentinel/core/parallel_scanner.py
 xss_sentinel/core/payload_manager.py
+xss_sentinel/core/red_team.py
 xss_sentinel/core/reporter.py
 xss_sentinel/core/scanner.py
 xss_sentinel/crawlers/__init__.py
@@ -23,5 +25,7 @@ xss_sentinel/ml/context_analyzer.py
 xss_sentinel/ml/model.py
 xss_sentinel/ml/payload_generator.py
 xss_sentinel/utils/__init__.py
+xss_sentinel/utils/browser_verifier.py
+xss_sentinel/utils/deep_context.py
 xss_sentinel/utils/dom_utils.py
 xss_sentinel/utils/http_utils.py
