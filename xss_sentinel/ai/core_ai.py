@@ -4,10 +4,35 @@ import json
 import re
 from typing import List, Dict, Tuple
 from .adversarial_fuzzer import AdversarialFuzzer
-from sentence_transformers import SentenceTransformer
-from transformers import AutoTokenizer
-from tensorflow import keras
-from transformers import pipeline
+
+# Try to import AI dependencies with fallback
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+    print("Warning: sentence_transformers not available. AI features will be limited.")
+
+try:
+    from transformers import AutoTokenizer
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    print("Warning: transformers not available. AI features will be limited.")
+
+try:
+    from tensorflow import keras
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    print("Warning: tensorflow not available. AI features will be limited.")
+
+try:
+    from transformers import pipeline
+    PIPELINE_AVAILABLE = True
+except ImportError:
+    PIPELINE_AVAILABLE = False
+    print("Warning: transformers pipeline not available. AI features will be limited.")
 
 class XSSAICore:
     """
@@ -18,22 +43,55 @@ class XSSAICore:
     def __init__(self, model_path=None):
         print("🚀 Initializing XSS AI Core...")
         
-        # Load pre-trained or custom models
-        if model_path:
-            self.sentence_model = SentenceTransformer(model_path)
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        else:
-            self.sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
-            self.tokenizer = AutoTokenizer.from_pretrained('distilbert-base-uncased')
+        # Initialize components based on availability
+        self.sentence_model = None
+        self.tokenizer = None
+        self.context_analyzer = None
+        self.payload_generator = None
+        self.evasion_predictor = None
+        
+        # Load pre-trained or custom models if available
+        if SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                if model_path:
+                    self.sentence_model = SentenceTransformer(model_path)
+                else:
+                    self.sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
+                print("✅ Sentence transformer model loaded")
+            except Exception as e:
+                print(f"Warning: Could not load sentence transformer: {e}")
+        
+        if TRANSFORMERS_AVAILABLE:
+            try:
+                if model_path:
+                    self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+                else:
+                    self.tokenizer = AutoTokenizer.from_pretrained('distilbert-base-uncased')
+                print("✅ Tokenizer loaded")
+            except Exception as e:
+                print(f"Warning: Could not load tokenizer: {e}")
 
         # Initialize Adversarial Fuzzer
         self.fuzzer = AdversarialFuzzer()
         
-        # Initialize AI models
-        self.context_analyzer = self._build_context_analyzer()
-        self.payload_generator = self._build_payload_generator()
-        self.evasion_predictor = self._build_evasion_predictor()
-        self.anomaly_detector = IsolationForest(contamination='auto')  # Use 'auto' for string type safety
+        # Initialize AI models if dependencies are available
+        if TENSORFLOW_AVAILABLE:
+            try:
+                self.context_analyzer = self._build_context_analyzer()
+                self.evasion_predictor = self._build_evasion_predictor()
+                print("✅ Neural network models initialized")
+            except Exception as e:
+                print(f"Warning: Could not initialize neural networks: {e}")
+        
+        if PIPELINE_AVAILABLE:
+            try:
+                self.payload_generator = self._build_payload_generator()
+                print("✅ Payload generator initialized")
+            except Exception as e:
+                print(f"Warning: Could not initialize payload generator: {e}")
+        
+        # Initialize basic models that don't require external dependencies
+        self.anomaly_detector = IsolationForest(contamination='auto')
         
         # Load XSS knowledge base
         self.xss_patterns = self._load_xss_patterns()
@@ -43,39 +101,65 @@ class XSSAICore:
     
     def _build_context_analyzer(self):
         """Build neural network for context analysis"""
-        model = keras.Sequential([
-            keras.layers.Dense(512, activation='relu', input_shape=(768,)),
-            keras.layers.Dropout(0.3),
-            keras.layers.Dense(256, activation='relu'),
-            keras.layers.Dropout(0.2),
-            keras.layers.Dense(128, activation='relu'),
-            keras.layers.Dense(64, activation='relu'),
-            keras.layers.Dense(10, activation='softmax')  # XSS context types
-        ])
-        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-        return model
+        if not TENSORFLOW_AVAILABLE:
+            return None
+            
+        try:
+            model = keras.Sequential([
+                keras.layers.Dense(512, activation='relu', input_shape=(768,)),
+                keras.layers.Dropout(0.3),
+                keras.layers.Dense(256, activation='relu'),
+                keras.layers.Dropout(0.2),
+                keras.layers.Dense(128, activation='relu'),
+                keras.layers.Dense(64, activation='relu'),
+                keras.layers.Dense(10, activation='softmax')  # XSS context types
+            ])
+            model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+            return model
+        except Exception as e:
+            print(f"Warning: Could not build context analyzer: {e}")
+            return None
     
     def _build_payload_generator(self):
         """Build transformer-based payload generator"""
-        return pipeline('text-generation', model='distilgpt2', max_length=100)
+        if not PIPELINE_AVAILABLE:
+            return None
+            
+        try:
+            return pipeline('text-generation', model='distilgpt2', max_length=100)
+        except Exception as e:
+            print(f"Warning: Could not build payload generator: {e}")
+            return None
     
     def _build_evasion_predictor(self):
         """Build model to predict WAF evasion techniques"""
-        model = keras.Sequential([
-            keras.layers.LSTM(128, return_sequences=True, input_shape=(None, 100)),
-            keras.layers.LSTM(64),
-            keras.layers.Dense(32, activation='relu'),
-            keras.layers.Dense(5, activation='softmax')  # Evasion techniques
-        ])
-        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-        return model
+        if not TENSORFLOW_AVAILABLE:
+            return None
+            
+        try:
+            model = keras.Sequential([
+                keras.layers.LSTM(128, return_sequences=True, input_shape=(None, 100)),
+                keras.layers.LSTM(64),
+                keras.layers.Dense(32, activation='relu'),
+                keras.layers.Dense(5, activation='softmax')  # Evasion techniques
+            ])
+            model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+            return model
+        except Exception as e:
+            print(f"Warning: Could not build evasion predictor: {e}")
+            return None
     
     def analyze_context(self, html_content: str, url: str) -> Dict:
         """AI-powered context analysis"""
         print("🧠 Analyzing injection context...")
         
-        # Extract features using sentence transformers
-        embeddings = self.sentence_model.encode([html_content])
+        # Extract features using sentence transformers if available
+        embeddings = None
+        if self.sentence_model:
+            try:
+                embeddings = self.sentence_model.encode([html_content])
+            except Exception as e:
+                print(f"Warning: Could not encode content: {e}")
         
         # Analyze HTML structure
         structure_features = self._analyze_html_structure(html_content)
@@ -84,13 +168,25 @@ class XSSAICore:
         injection_points = self._predict_injection_points(html_content)
         
         # Context classification
-        context_type = self._classify_context(embeddings[0])
+        context_type = "html"  # Default
+        if embeddings is not None and self.context_analyzer:
+            try:
+                context_type = self._classify_context(embeddings[0])
+            except Exception as e:
+                print(f"Warning: Could not classify context: {e}")
+        
+        risk_score = 0.5  # Default
+        if embeddings is not None:
+            try:
+                risk_score = self._calculate_risk_score(embeddings[0])
+            except Exception as e:
+                print(f"Warning: Could not calculate risk score: {e}")
         
         return {
             'context_type': context_type,
             'injection_points': injection_points,
             'structure_features': structure_features,
-            'risk_score': self._calculate_risk_score(embeddings[0])
+            'risk_score': risk_score
         }
     
     def generate_ai_payloads(self, context: Dict, target_url: str) -> List[str]:

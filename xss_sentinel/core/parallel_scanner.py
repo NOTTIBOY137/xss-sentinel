@@ -6,7 +6,8 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse, urljoin
 from typing import List, Dict, Any, Optional
 from .payload_manager import PayloadManager
 from bs4 import BeautifulSoup
-from ..utils.http_utils import stealth_client, generate_stealth_payloads
+from ..utils.http_utils import stealth_client, generate_stealth_payloads, is_valid_url
+import random
 
 
 class ParallelScanner:
@@ -33,25 +34,35 @@ class ParallelScanner:
             'scanned_urls': 0,
             'vulnerabilities_found': 0,
             'blocked_requests': 0,
+            'invalid_urls_skipped': 0,
             'start_time': None,
             'end_time': None
         }
         
     def add_urls(self, urls: List[str]):
         """Add URLs to scan"""
-        # Filter URLs to only include those from target domain
+        # Filter URLs to only include valid ones from target domain
         filtered_urls = []
         for url in urls:
             try:
+                # Skip invalid URLs
+                if not is_valid_url(url):
+                    self.scan_stats['invalid_urls_skipped'] += 1
+                    continue
+                
                 parsed = urlparse(url)
                 if parsed.netloc == self.target_domain or parsed.netloc.endswith('.' + self.target_domain):
                     filtered_urls.append(url)
-            except Exception:
+            except Exception as e:
+                print(f"Error parsing URL {url}: {e}")
+                self.scan_stats['invalid_urls_skipped'] += 1
                 continue
         
         self.urls_to_scan.extend(filtered_urls)
         self.scan_stats['total_urls'] = len(self.urls_to_scan)
         print(f"Added {len(filtered_urls)} URLs to scan queue")
+        if self.scan_stats['invalid_urls_skipped'] > 0:
+            print(f"Skipped {self.scan_stats['invalid_urls_skipped']} invalid URLs")
     
     def scan(self, timeout: Optional[int] = None) -> List[Dict[str, Any]]:
         """Start parallel scanning with stealth capabilities"""
@@ -376,5 +387,4 @@ class ParallelScanner:
         }
 
 # Import missing module
-import re
-import random 
+import re 

@@ -38,24 +38,68 @@
 - Python 3.8 or higher
 - pip package manager
 
-### Quick Installation
+### Quick Installation (Recommended)
 ```bash
 # Clone the repository
 git clone https://github.com/NOTTIBOY137/xss-sentinel.git
 cd xss-sentinel
 
-# Install dependencies
+# Run the automated installation script
+python install.py
+```
+
+### Manual Installation
+```bash
+# Clone the repository
+git clone https://github.com/NOTTIBOY137/xss-sentinel.git
+cd xss-sentinel
+
+# Install core dependencies
 pip install -r requirements.txt
 
 # Install the package in development mode
 pip install -e .
 ```
 
-### Optional AI Dependencies
+### AI Dependencies (Optional)
 For full AI capabilities, install additional dependencies:
 ```bash
-pip install sentence-transformers transformers torch
+# Install AI/ML dependencies
+pip install sentence-transformers transformers torch tensorflow
+
+# Or install with extras
+pip install -e .[ai]
 ```
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **AI modules not available error**
+   ```bash
+   # Install AI dependencies
+   pip install sentence-transformers transformers torch tensorflow
+   ```
+
+2. **JavaScript protocol errors**
+   - This has been fixed in the latest version
+   - The tool now properly validates URLs before making requests
+
+3. **Malformed URL errors**
+   - URL validation has been improved
+   - Invalid URLs are now skipped automatically
+
+4. **Import errors**
+   ```bash
+   # Reinstall the package
+   pip uninstall xss-sentinel
+   pip install -e .
+   ```
+
+#### System Requirements
+- **RAM**: Minimum 4GB, Recommended 8GB+ for AI features
+- **Storage**: 2GB+ free space (more for AI models)
+- **Network**: Stable internet connection for downloading models
 
 ## 🎯 Usage Examples
 
@@ -168,136 +212,100 @@ xss-sentinel/
 │   │   ├── crawler.py
 │   │   ├── scanner.py
 │   │   ├── reporter.py
-│   │   └── parallel_scanner.py
+│   │   ├── parallel_scanner.py
+│   │   └── payload_manager.py
 │   ├── crawlers/              # Advanced crawling
 │   │   ├── advanced_crawler.py
 │   │   ├── js_crawler.py
 │   │   └── wayback_crawler.py
-│   ├── ml/                    # Machine learning
-│   │   ├── context_analyzer.py
+│   ├── ml/                    # Legacy ML components
 │   │   ├── model.py
-│   │   └── payload_generator.py
+│   │   ├── payload_generator.py
+│   │   └── context_analyzer.py
 │   ├── utils/                 # Utility functions
+│   │   ├── http_utils.py
 │   │   ├── browser_verifier.py
 │   │   ├── dom_utils.py
-│   │   └── http_utils.py
+│   │   └── deep_context.py
 │   └── cli.py                 # Command-line interface
-├── data/                      # Payload data
+├── tests/                     # Test suite
+├── data/                      # Data files and payloads
 ├── reports/                   # Generated reports
 ├── requirements.txt           # Dependencies
-└── setup.py                   # Package configuration
+├── setup.py                   # Package configuration
+├── install.py                 # Installation script
+└── README.md                  # This file
 ```
 
-## 🔧 Advanced Configuration
+## 🔧 Development
 
-### Custom Payload Files
-Create custom payload files for specific testing scenarios:
-```txt
-# custom_payloads.txt
-<script>alert('XSS')</script>
-javascript:alert('XSS')
-<img src=x onerror=alert('XSS')>
-```
-
-### Environment Variables
+### Setting up Development Environment
 ```bash
-export XSS_SENTINEL_TIMEOUT=30
-export XSS_SENTINEL_USER_AGENT="Custom User Agent"
-export XSS_SENTINEL_VERBOSE=1
-```
-
-### Configuration Files
-Create `config.json` for persistent settings:
-```json
-{
-  "default_mode": "thorough",
-  "evasion_level": 2,
-  "parallel_workers": 10,
-  "timeout": 15,
-  "user_agent": "XSS-Sentinel/1.0"
-}
-```
-
-## 📊 Report Analysis
-
-### JSON Reports
-Detailed machine-readable reports with full vulnerability data:
-```json
-{
-  "scan_info": {
-    "target": "https://example.com",
-    "timestamp": "2025-01-22T10:30:00",
-    "duration": 45.2
-  },
-  "vulnerabilities": [
-    {
-      "url": "https://example.com/search?q=test",
-      "parameter": "q",
-      "payload": "<script>alert('XSS')</script>",
-      "context": "html",
-      "confidence": 0.95
-    }
-  ]
-}
-```
-
-### HTML Reports
-Interactive web-based reports with:
-- Vulnerability charts and statistics
-- Searchable vulnerability tables
-- Payload analysis and context information
-- Export capabilities
-
-## 🛡️ Security Considerations
-
-### Responsible Disclosure
-- Always obtain proper authorization before testing
-- Respect rate limits and robots.txt
-- Use appropriate delays between requests
-- Report vulnerabilities through proper channels
-
-### Legal Compliance
-- Ensure compliance with local laws and regulations
-- Obtain written permission for testing
-- Follow responsible disclosure practices
-- Respect privacy and data protection laws
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### Development Setup
-```bash
-# Clone and setup development environment
+# Clone and install in development mode
 git clone https://github.com/NOTTIBOY137/xss-sentinel.git
 cd xss-sentinel
-pip install -r requirements.txt
-pip install -e .
+python install.py
 
 # Run tests
-python -m pytest tests/
+pytest tests/
 
-# Run linting
+# Code formatting
+black xss_sentinel/
 flake8 xss_sentinel/
 ```
+
+### Contributing
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Run the test suite
+6. Submit a pull request
+
+## 🛡️ Security
+
+### Responsible Disclosure
+- This tool is for authorized security testing only
+- Always obtain proper authorization before testing
+- Respect rate limits and robots.txt
+- Report vulnerabilities responsibly
+
+### Legal Notice
+- Use only on systems you own or have explicit permission to test
+- The authors are not responsible for misuse of this tool
+- Comply with all applicable laws and regulations
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## 🤝 Support
 
-- Built with modern Python security testing practices
-- Inspired by the security research community
-- Uses state-of-the-art AI/ML technologies
-- Designed for enterprise security workflows
+### Getting Help
+- Check the [troubleshooting section](#troubleshooting) above
+- Review the [configuration options](#configuration-options)
+- Open an issue on GitHub for bugs
+- Join discussions for feature requests
 
-## 📞 Support
+### Community
+- **GitHub Issues**: Bug reports and feature requests
+- **Discussions**: General questions and community support
+- **Wiki**: Detailed documentation and guides
 
-- **Issues**: [GitHub Issues](https://github.com/NOTTIBOY137/xss-sentinel/issues)
-- **Documentation**: [Wiki](https://github.com/NOTTIBOY137/xss-sentinel/wiki)
-- **Discussions**: [GitHub Discussions](https://github.com/NOTTIBOY137/xss-sentinel/discussions)
+## 🚀 Roadmap
+
+### Upcoming Features
+- [ ] Enhanced AI model training capabilities
+- [ ] Integration with vulnerability management platforms
+- [ ] Advanced WAF bypass techniques
+- [ ] Real-time collaboration features
+- [ ] Mobile application testing support
+
+### Version History
+- **v1.0.0**: Initial release with AI-powered XSS detection
+- **v1.1.0**: Enhanced URL validation and error handling
+- **v1.2.0**: Improved AI dependency management
 
 ---
 
-**⚠️ Disclaimer**: This tool is for authorized security testing only. Always obtain proper permission before testing any systems. The authors are not responsible for any misuse of this software.
+**Made with ❤️ by the XSS Sentinel Team**

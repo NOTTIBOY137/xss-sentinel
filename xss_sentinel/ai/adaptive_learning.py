@@ -1,10 +1,18 @@
 import numpy as np
-import tensorflow as tf
-from sklearn.ensemble import RandomForestClassifier
 import pickle
 import json
 from datetime import datetime
 from typing import Dict, List, Tuple
+
+# Try to import AI dependencies with fallback
+try:
+    import tensorflow as tf
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    print("Warning: tensorflow not available. Adaptive learning will use fallback methods.")
+
+from sklearn.ensemble import RandomForestClassifier
 
 class AdaptiveLearningEngine:
     """
@@ -21,30 +29,43 @@ class AdaptiveLearningEngine:
         self.waf_signatures = {}
         self.learning_data = []
         
-        # Neural network for pattern recognition
-        self.pattern_network = self._build_pattern_network()
+        # Neural network for pattern recognition (if available)
+        self.pattern_network = None
+        if TENSORFLOW_AVAILABLE:
+            try:
+                self.pattern_network = self._build_pattern_network()
+                print("✅ Neural network initialized")
+            except Exception as e:
+                print(f"Warning: Could not initialize neural network: {e}")
         
         print("✅ Adaptive Learning Engine ready!")
     
     def _build_pattern_network(self):
         """Build neural network for pattern learning"""
-        model = tf.keras.Sequential([
-            tf.keras.layers.Dense(256, activation='relu', input_shape=(100,)),
-            tf.keras.layers.Dropout(0.3),
-            tf.keras.layers.Dense(128, activation='relu'),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dense(1, activation='sigmoid')  # Success probability
-        ])
-        
-        model.compile(
-            optimizer='adam',
-            loss='binary_crossentropy',
-            metrics=['accuracy']
-        )
-        
-        return model
+        if not TENSORFLOW_AVAILABLE:
+            return None
+            
+        try:
+            model = tf.keras.Sequential([
+                tf.keras.layers.Dense(256, activation='relu', input_shape=(100,)),
+                tf.keras.layers.Dropout(0.3),
+                tf.keras.layers.Dense(128, activation='relu'),
+                tf.keras.layers.Dropout(0.2),
+                tf.keras.layers.Dense(64, activation='relu'),
+                tf.keras.layers.Dense(32, activation='relu'),
+                tf.keras.layers.Dense(1, activation='sigmoid')  # Success probability
+            ])
+            
+            model.compile(
+                optimizer='adam',
+                loss='binary_crossentropy',
+                metrics=['accuracy']
+            )
+            
+            return model
+        except Exception as e:
+            print(f"Warning: Could not build pattern network: {e}")
+            return None
     
     def learn_from_result(self, payload: str, context: Dict, success: bool, response_data: Dict):
         """Learn from payload test results"""
@@ -99,11 +120,14 @@ class AdaptiveLearningEngine:
                 pass
         
         # Fallback to neural network prediction
-        try:
-            probability = self.pattern_network.predict(features_array)[0][0]
-            return float(probability)
-        except:
-            return 0.5  # Default probability
+        if self.pattern_network:
+            try:
+                probability = self.pattern_network.predict(features_array)[0][0]
+                return float(probability)
+            except:
+                pass
+        
+        return 0.5  # Default probability
     
     def generate_adaptive_payloads(self, context: Dict, count: int = 20) -> List[str]:
         """Generate payloads based on learned patterns"""

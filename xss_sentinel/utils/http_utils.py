@@ -17,9 +17,68 @@ from typing import Optional, Dict, Any, List
 import ssl
 import socket
 import urllib3
+import re
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+def is_valid_url(url: str) -> bool:
+    """Validate if a URL is safe to request"""
+    if not url or not isinstance(url, str):
+        return False
+    
+    # Check for invalid protocols
+    invalid_protocols = ['javascript:', 'data:', 'file:', 'ftp:', 'mailto:', 'tel:']
+    url_lower = url.lower()
+    for protocol in invalid_protocols:
+        if url_lower.startswith(protocol):
+            return False
+    
+    # Check for malformed URLs with encoded characters in hostname
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            return False
+        
+        # Check for encoded characters in hostname that would cause DNS resolution issues
+        hostname = parsed.netloc.split(':')[0]  # Remove port if present
+        if '%' in hostname:
+            return False
+        
+        # Check for suspicious characters in hostname
+        if re.search(r'[<>"\']', hostname):
+            return False
+        
+        # Check for malformed hostnames (like arabica1.cf which may be invalid)
+        # This is a basic check - in practice, you might want more sophisticated validation
+        if len(hostname) < 3 or len(hostname) > 253:
+            return False
+        
+        # Check for invalid TLD patterns (very basic)
+        if hostname.count('.') == 0:
+            # Allow localhost without dots
+            if hostname.lower() != 'localhost':
+                return False
+        
+        # Check for suspicious patterns in hostname
+        suspicious_patterns = [
+            r'\.cf$',  # .cf domains are often used for malicious purposes
+            r'\.tk$',  # .tk domains are often used for malicious purposes
+            r'\.ml$',  # .ml domains are often used for malicious purposes
+            r'\.ga$',  # .ga domains are often used for malicious purposes
+            r'\.gq$',  # .gq domains are often used for malicious purposes
+        ]
+        
+        for pattern in suspicious_patterns:
+            if re.search(pattern, hostname, re.IGNORECASE):
+                # Allow these domains but log them
+                print(f"Warning: Suspicious domain detected: {hostname}")
+                # For now, we'll allow them but you might want to block them
+                # return False
+            
+        return True
+    except Exception:
+        return False
 
 class StealthHTTPClient:
     """Advanced stealth HTTP client with WAF bypass capabilities"""
@@ -118,6 +177,11 @@ class StealthHTTPClient:
         encoded_payloads.append(hex_encoded)
         return list(set(encoded_payloads))
     def make_request(self, url: str, method: str = "GET", data: Optional[Dict] = None, headers: Optional[Dict] = None, payload: Optional[str] = None) -> Optional[requests.Response]:
+        # Validate URL before making request
+        if not is_valid_url(url):
+            print(f"Skipping invalid URL: {url}")
+            return None
+            
         if url in self.blocked_domains:
             print(f"Domain {urlparse(url).netloc} is blocked, skipping...")
             return None
@@ -189,7 +253,7 @@ class StealthHTTPClient:
                 time.sleep(random.uniform(0.1, 0.5))
         return results
 stealth_client = StealthHTTPClient(stealth_level=3)
-def make_request(url, method="GET", data=None, headers=None, timeout=10, max_retries=3):
+def make_request(url, method="GET", data=None, headers=None):
     return stealth_client.make_request(url, method, data, headers)
 def is_blocked(response):
     if not response:

