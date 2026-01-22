@@ -159,3 +159,18 @@ models/
 *.joblib
 *.h5
 *.onnx
+*.pt
+*.pth
+*.ckpt
+data/models/
+data/logs/
+data/reports/
+*.db
+*.sqlite
+*.sqlite3
+
+# Neural Engine specific
+checkpoints/
+saved_models/
+*.qtable
+*.weights

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="xss-sentinel",
-    version="1.0.0",
+    version="2.0.0",
     description="Advanced AI-Powered XSS Testing Platform",
     author="NOTTIBOY137",
     author_email="",
