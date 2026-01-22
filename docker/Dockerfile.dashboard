@@ -1,0 +1,34 @@
+# Dockerfile for Web Dashboard
+FROM python:3.10-slim
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir flask flask-cors
+
+# Copy dashboard code (if exists)
+COPY docker/dashboard.py ./dashboard.py
+
+# Create simple dashboard if not exists
+RUN if [ ! -f dashboard.py ]; then \
+    echo 'from flask import Flask, jsonify; app = Flask(__name__); \
+    @app.route("/health"); \
+    def health(): return jsonify({"status": "ok"}); \
+    @app.route("/"); \
+    def index(): return "<h1>XSS Sentinel Dashboard</h1><p>Status: Running</p>"; \
+    if __name__ == "__main__": app.run(host="0.0.0.0", port=8080)' > dashboard.py; \
+    fi
+
+EXPOSE 8080
+
+CMD ["python", "dashboard.py"]

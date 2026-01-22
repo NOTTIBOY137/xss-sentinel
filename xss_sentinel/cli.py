@@ -2,6 +2,17 @@ import argparse
 import sys
 import os
 import time
+import warnings
+
+# Suppress TensorFlow warnings globally
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress INFO and WARNING messages
+
+# Suppress TensorFlow deprecation warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='tensorflow')
+warnings.filterwarnings('ignore', message='.*sparse_softmax_cross_entropy.*')
+warnings.filterwarnings('ignore', message='.*oneDNN.*')
+
 from urllib.parse import urlparse
 from .core.crawler import Crawler
 from .core.scanner import XSSScanner
@@ -31,6 +42,14 @@ try:
 except ImportError as e:
     AI_AVAILABLE = False
     print(f"\033[93m⚠️ AI modules not available: {e}\033[0m")
+
+# Import Neural Engine v2.0
+try:
+    from .neural_engine.integration import NeuralEngineIntegration
+    NEURAL_ENGINE_AVAILABLE = True
+except ImportError as e:
+    NEURAL_ENGINE_AVAILABLE = False
+    print(f"\033[93m⚠️ Neural Engine v2.0 not available: {e}\033[0m")
 
 def main():
     parser = argparse.ArgumentParser(description='XSS Sentinel - AI-Powered XSS vulnerability scanner')
@@ -72,6 +91,8 @@ def main():
                       help='WAF evasion level (0=none, 1=basic, 2=advanced, 3=extreme)')
     parser.add_argument('--payloads-per-point', type=int, default=5, 
                       help='Number of payloads to test per injection point (default: 5)')
+    parser.add_argument('--neural-engine', '--v2', action='store_true', 
+                      help='Use v2.0 Neural Engine (Genetic Mutator, GAN, Reinforcement Learning)')
     
     # Scan mode
     parser.add_argument('--mode', choices=['standard', 'thorough', 'quick', 'passive'], default='standard',
@@ -103,9 +124,12 @@ def main():
         print("Error: Could not parse URL")
         sys.exit(1)
     
-    print(f"XSS Sentinel v1.0.0")
+    version = "v2.0 Neural Engine" if args.neural_engine else "v1.0.0"
+    print(f"XSS Sentinel {version}")
     print(f"Target: {args.url}")
     print(f"Mode: {args.mode}")
+    if args.neural_engine:
+        print(f"Neural Engine: Enabled (v2.0)")
     print(f"AI/ML features: {'Disabled' if args.no_ml else 'Enabled'}")
     print("="*60)
     
@@ -225,8 +249,31 @@ def main():
             print(f"Passive scan report saved to: {report_path}")
             sys.exit(0)
         
-        # Initialize AI components if enabled
-        if not args.no_ml and (args.ai_payloads or args.context_analysis):
+        # Initialize Neural Engine v2.0 if requested
+        neural_engine = None
+        if args.neural_engine:
+            if NEURAL_ENGINE_AVAILABLE:
+                print("\033[92m🧠 Initializing XSS Sentinel v2.0 Neural Engine...\033[0m")
+                try:
+                    neural_engine = NeuralEngineIntegration(
+                        enable_genetic=True,
+                        enable_gan=True,
+                        enable_rl=True
+                    )
+                    print("\033[92m✅ Neural Engine v2.0 loaded successfully!\033[0m")
+                    print("   - Genetic Mutator: Enabled")
+                    print("   - GAN Payload Generator: Enabled")
+                    print("   - Reinforcement Learning: Enabled")
+                except Exception as e:
+                    print(f"\033[93m⚠️ Could not initialize Neural Engine: {e}\033[0m")
+                    print("   Falling back to standard AI components...")
+                    neural_engine = None
+            else:
+                print("\033[93m⚠️ Neural Engine v2.0 not available. Install required dependencies.\033[0m")
+                print("   Run: pip install torch torchvision")
+        
+        # Initialize AI components if enabled (and not using Neural Engine)
+        if not args.no_ml and (args.ai_payloads or args.context_analysis) and not neural_engine:
             print("Initializing Next-Gen AI Stack...")
             ai_core = None
             transformer_gen = None
@@ -264,6 +311,11 @@ def main():
             delay=args.delay,
             results_dir=args.output
         )
+        
+        # Integrate Neural Engine if available
+        if neural_engine:
+            scanner.neural_engine = neural_engine
+            print("🧠 Neural Engine integrated with scanner!")
         
         # Add URLs to scan
         scanner.add_urls(urls_to_scan)

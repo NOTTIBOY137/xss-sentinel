@@ -1,12 +1,49 @@
 import numpy as np
 import pickle
 import json
+import warnings
+import os
+import sys
 from datetime import datetime
 from typing import Dict, List, Tuple
 
+# Suppress TensorFlow warnings
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress INFO and WARNING messages
+
+# Suppress specific TensorFlow deprecation warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='tensorflow')
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='tf_keras')
+warnings.filterwarnings('ignore', message='.*sparse_softmax_cross_entropy.*')
+warnings.filterwarnings('ignore', message='.*oneDNN.*')
+warnings.filterwarnings('ignore', message='.*The name tf.losses.*')
+
 # Try to import AI dependencies with fallback
 try:
-    import tensorflow as tf
+    import logging
+    # Suppress TensorFlow logging before import
+    logging.getLogger('tensorflow').setLevel(logging.ERROR)
+    logging.getLogger('tf_keras').setLevel(logging.ERROR)
+    
+    # Temporarily suppress stderr during TensorFlow import to catch direct prints
+    class SuppressStderr:
+        def __init__(self):
+            self.stderr = sys.stderr
+        def __enter__(self):
+            sys.stderr = open(os.devnull, 'w')
+            return self
+        def __exit__(self, *args):
+            sys.stderr.close()
+            sys.stderr = self.stderr
+    
+    with SuppressStderr():
+        import tensorflow as tf
+        # Suppress TensorFlow logging
+        tf.get_logger().setLevel('ERROR')
+        # Suppress all TensorFlow warnings
+        if hasattr(tf.compat.v1, 'logging'):
+            tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+    
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False

@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # Main Scanner Service
+  scanner:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: xss-sentinel-scanner
+    volumes:
+      - ../data:/app/data
+      - ../config:/app/config
+    environment:
+      - PYTHONUNBUFFERED=1
+      - NEURAL_ENGINE_ENABLED=true
+    networks:
+      - xss-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import xss_sentinel.neural_engine"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Blind XSS Monitor Service
+  blind-monitor:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: xss-sentinel-blind-monitor
+    command: python -c "from xss_sentinel.neural_engine.blind_xss_monitor import BlindXSSMonitor; import asyncio; monitor = BlindXSSMonitor(callback_domain='localhost', callback_port=8888); asyncio.run(monitor.start_server())"
+    ports:
+      - "8888:8888"
+    volumes:
+      - ../data:/app/data
+    environment:
+      - CALLBACK_DOMAIN=localhost
+      - CALLBACK_PORT=8888
+    networks:
+      - xss-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Swarm Coordinator Service
+  swarm-coordinator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: xss-sentinel-swarm-coordinator
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../data:/app/data
+    environment:
+      - COORDINATOR_PORT=5000
+      - MAX_WORKERS=10
+    networks:
+      - xss-network
+    restart: unless-stopped
+
+  # Worker Node 1
+  worker-1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: xss-sentinel-worker-1
+    environment:
+      - WORKER_ID=worker_1
+      - COORDINATOR_URL=http://swarm-coordinator:5000
+    networks:
+      - xss-network
+    restart: unless-stopped
+    depends_on:
+      - swarm-coordinator
+
+  # Worker Node 2
+  worker-2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: xss-sentinel-worker-2
+    environment:
+      - WORKER_ID=worker_2
+      - COORDINATOR_URL=http://swarm-coordinator:5000
+    networks:
+      - xss-network
+    restart: unless-stopped
+    depends_on:
+      - swarm-coordinator
+
+  # Redis for Coordination
+  redis:
+    image: redis:7-alpine
+    container_name: xss-sentinel-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - xss-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL for Persistence
+  postgres:
+    image: postgres:15-alpine
+    container_name: xss-sentinel-postgres
+    environment:
+      - POSTGRES_DB=xss_sentinel
+      - POSTGRES_USER=xss_user
+      - POSTGRES_PASSWORD=xss_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - xss-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xss_user"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Web Dashboard
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: xss-sentinel-dashboard
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../data:/app/data
+    environment:
+      - DASHBOARD_PORT=8080
+    networks:
+      - xss-network
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  xss-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
